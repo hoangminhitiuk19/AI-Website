@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Upload and Analysis</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.20.0/cytoscape.min.js"></script>
+</head>
+<body>
+    <h1>Upload a File</h1>
+    <form id="uploadForm" enctype="multipart/form-data">
+        <label for="fileInput">Choose a file:</label>
+        <input type="file" id="fileInput" name="file" />
+        <button type="submit">Upload</button>
+    </form>
+    <div id="result"></div>
+    <div id="fileContent"></div>
+    <div id="analysisResult"></div>
+    <img id="imagePreview" src="" alt="Image Preview" style="display:none;" />
+    <audio id="audioPlayer" controls style="display:none;">
+        Your browser does not support the audio element.
+    </audio>
+    <video id="videoPlayer" controls style="display:none;" width="600">
+        Your browser does not support the video element.
+    </video>
+    <div id="cy" style="width: 600px; height: 600px; border: 1px solid black;"></div>
+    <script>
+        document.getElementById('uploadForm').addEventListener('submit', function(event) {
+    event.preventDefault();
+
+    const fileInput = document.getElementById('fileInput');
+    const file = fileInput.files[0];
+
+    if (!file) {
+        alert('Please select a file to upload.');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    fetch('/upload', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        const resultDiv = document.getElementById('result');
+        const fileContentDiv = document.getElementById('fileContent');
+        const analysisResultDiv = document.getElementById('analysisResult');
+        const imagePreview = document.getElementById('imagePreview');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const videoPlayer = document.getElementById('videoPlayer');
+        const cyContainer = document.getElementById('cy');
+        
+        resultDiv.innerText = '';
+        fileContentDiv.innerText = '';
+        analysisResultDiv.innerText = '';
+        imagePreview.src = '';
+        imagePreview.style.display = 'none';
+        audioPlayer.src = '';
+        audioPlayer.style.display = 'none';
+        videoPlayer.src = '';
+        videoPlayer.style.display = 'none';
+        cyContainer.innerHTML = '';
+
+        if (data.status === 'success') {
+            console.log('File uploaded successfully:', data);
+            switch (data.type) {
+                case 'text':
+                    fileContentDiv.innerText = data.content;
+                    console.log('Sending text for analysis:', data.content);
+                    // Send text for analysis to FastAPI server on port 8000
+                    fetch('http://localhost:8000/analyze_text', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: data.content })
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Network response was not ok');
+                        }
+                        return response.json();
+                    })
+                    .then(analysisData => {
+                        console.log('Analysis result:', analysisData);
+                        analysisResultDiv.innerHTML = `
+                            <h2>Text Analysis Result</h2>
+                            <p><strong>Entities:</strong> ${JSON.stringify(analysisData.entities)}</p>
+                            <p><strong>Relationships:</strong> ${JSON.stringify(analysisData.relationships)}</p>
+                            <p><strong>Sentiment:</strong> Polarity: ${analysisData.sentiment.polarity}, Subjectivity: ${analysisData.sentiment.subjectivity}</p>
+                            <p><strong>Summary:</strong> ${analysisData.summary}</p>
+                        `;
+                        renderGraph(analysisData.entities, analysisData.relationships);
+                    })
+                    .catch(error => {
+                        console.error('Error during text analysis:', error);
+                        analysisResultDiv.innerText = 'An error occurred during text analysis';
+                    });
+                    break;
+                case 'image':
+                    imagePreview.src = '/uploads/' + data.content;
+                    imagePreview.style.display = 'block';
+                    analysisResultDiv.innerText = `Extracted Text: ${data.extractedText}`;
+                    break;
+                case 'audio':
+                    audioPlayer.src = '/uploads/' + data.content;
+                    audioPlayer.style.display = 'block';
+                    analysisResultDiv.innerText = `Extracted Text: ${data.extractedText}`;
+                    break;
+                case 'video':
+                    videoPlayer.src = '/uploads/' + data.content;
+                    videoPlayer.style.display = 'block';
+                    analysisResultDiv.innerText = `Extracted Text: ${data.extractedText}`;
+                    break;
+            }
+            if (data.transcript) {
+                analysisResultDiv.innerText += '\n\nTranscript:\n' + data.transcript;
+            }
+        } else {
+            console.log('Upload failed:', data);
+            resultDiv.innerText = data.message || 'An error occurred';
+        }
+    })
+    .catch(error => {
+        console.error('Error during file upload:', error);
+        const resultDiv = document.getElementById('result');
+        resultDiv.innerText = 'An error occurred during the upload';
+    });
+});
+
+function renderGraph(entities, relationships) {
+    console.log('Entities:', entities);
+    console.log('Relationships:', relationships);
+
+    const elements = [];
+
+    // Add entities as nodes
+    if (entities && Array.isArray(entities)) {
+        entities.forEach(entity => {
+            elements.push({
+                data: { id: entity[0], label: entity[0], type: entity[1] }
+            });
+        });
+    } else {
+        console.error('Invalid entities:', entities);
+    }
+
+    // Add relationships as edges
+    if (relationships && Array.isArray(relationships)) {
+        relationships.forEach(rel => {
+            elements.push({
+                data: { source: rel[0], target: rel[2], label: rel[1] }
+            });
+        });
+    } else {
+        console.error('Invalid relationships:', relationships);
+    }
+
+    // Initialize Cytoscape
+    const cy = cytoscape({
+        container: document.getElementById('cy'),
+        elements: elements,
+        style: [
+            {
+                selector: 'node',
+                style: {
+                    'label': 'data(label)',
+                    'background-color': '#6FB1FC',
+                    'text-valign': 'center',
+                    'color': 'black',
+                    'width': 'label',
+                    'height': 'label',
+                    'padding': '10px',
+                    'font-size': '10px'
+                }
+            },
+            {
+                selector: 'edge',
+                style: {
+                    'width': 2,
+                    'line-color': '#ccc',
+                    'target-arrow-color': '#ccc',
+                    'target-arrow-shape': 'triangle',
+                    'curve-style': 'bezier',
+                    'label': 'data(label)',
+                    'font-size': '8px',
+                    'color': '#666'
+                }
+            }
+        ],
+        layout: {
+            name: 'cose',
+            idealEdgeLength: 100,
+            nodeOverlap: 20
+        }
+    });
+}
+    </script>
+</body>
+</html>

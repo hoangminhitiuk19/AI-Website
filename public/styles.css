@@ -1,0 +1,56 @@
+/* Style for the image preview */
+#imagePreview {
+    max-width: 100%;
+    height: auto;
+    display: none; /* Hide by default */
+}
+
+
+/* Class to show image */
+.show {
+    display: block;
+}
+/* Add styles for result div */
+#result {
+    margin-top: 20px;
+    font-size: 1.2em;
+}
+
+img {
+    max-width: 100%;
+    height: auto;
+}
+
+audio {
+    margin-top: 20px;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+}
+
+form {
+    margin-bottom: 20px;
+}
+
+#videoPlayer, #audioPlayer {
+    max-width: 100%;
+    margin-top: 10px;
+}
+/* Style for the result container */
+#resultContainer {
+    display: flex;
+    gap: 20px;
+    margin-top: 20px;
+}
+
+/* Style for the file content and analysis result */
+#fileContent, #analysisResult {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+/* Add more specific styles as needed */
